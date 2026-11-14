@@ -49,4 +49,8 @@ jobs:
           path: |
             target/release/aevora-client.exe
             tools/aevora-luau/target/release/aevora-luau.exe
+            scripts/**
+            BUILD_AEVORA.bat
+            RUN_AEVORA.bat
+            RUN_LUAU.bat
           if-no-files-found: error
