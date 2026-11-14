@@ -2,9 +2,12 @@
 setlocal
 cd /d "%~dp0"
 
+if exist "%~dp0tools\aevora-luau\target\release\aevora-luau.exe" goto run_built
+
 where cargo >nul 2>nul
 if errorlevel 1 (
-    echo Rust and Cargo are required. Install them from https://rustup.rs
+    echo A prebuilt Luau runner was not found and Rust/Cargo is not installed.
+    echo Install Rust from https://rustup.rs or build the runner first.
     exit /b 1
 )
 
@@ -16,7 +19,6 @@ if "%~1"=="" (
     exit /b 2
 )
 
-if exist "%~dp0tools\aevora-luau\target\release\aevora-luau.exe" goto run_built
 cargo run --manifest-path tools\aevora-luau\Cargo.toml -- %*
 exit /b %errorlevel%
 
