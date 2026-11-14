@@ -14,6 +14,8 @@ use crate::roblox::errors::ApiError;
 use crate::theme;
 use crate::ui::{FieldId, Hit, HitMap};
 use std::collections::HashMap;
+use std::fs::File;
+use std::process::{Child, Command as ProcessCommand, Stdio};
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -178,6 +180,10 @@ pub struct App {
     /// running menu is parked in `suspended_menu`).
     pub adding_account: bool,
     pub suspended_menu: Option<MenuView>,
+    /// One local Luau test process. This is not a live Roblox script executor.
+    pub script_child: Option<Child>,
+    pub script_log_file: Option<std::path::PathBuf>,
+    pub script_log_bytes: usize,
 }
 
 impl App {
@@ -217,6 +223,9 @@ impl App {
             restoring: has_saved_session,
             adding_account: false,
             suspended_menu: None,
+            script_child: None,
+            script_log_file: None,
+            script_log_bytes: 0,
         }
     }
 
@@ -431,6 +440,10 @@ impl App {
     /// Earliest future redraw needed for animations (spinner, countdown).
     fn schedule_anim(&mut self) -> Option<Instant> {
         let now = Instant::now();
+
+        // Drain output from the offline Luau test process and check its exit
+        // state without blocking the winit event loop.
+        self.poll_local_script();
         let mut wakes: Vec<Instant> = Vec::with_capacity(3);
 
         let spinner = match &self.screen {
@@ -706,7 +719,7 @@ impl App {
                         &mut v.add_scroll,
                         v.add_metrics.as_ref().map(|m| (m.content_h / m.h.max(1.0)).max(1.0)).unwrap_or(1.0),
                     ),
-                    (MenuTab::Settings, _, SettingsTab::General) | (MenuTab::Settings, _, SettingsTab::Appearance) | (MenuTab::Settings, _, SettingsTab::Logs) => (
+                    (MenuTab::Settings, _, SettingsTab::General) | (MenuTab::Settings, _, SettingsTab::Appearance) | (MenuTab::Settings, _, SettingsTab::Scripts) | (MenuTab::Settings, _, SettingsTab::Logs) => (
                         &mut v.settings_scroll,
                         v.settings_metrics.as_ref().map(|m| (m.content_h / m.h.max(1.0)).max(1.0)).unwrap_or(1.0),
                     ),
@@ -874,6 +887,8 @@ impl App {
                     | Hit::RadiusUp | Hit::RadiusDown | Hit::ColorPrev(_)
                     | Hit::ColorNext(_) | Hit::ResetAppearance | Hit::CancelAdd
                     | Hit::ClearField(_)
+                    | Hit::SelectScript(_) | Hit::RefreshScripts | Hit::RunScript
+                    | Hit::StopScript | Hit::OpenScript | Hit::OpenScriptsFolder
                     | Hit::CopyLogs | Hit::SaveLogs | Hit::ClearLogs
                     | Hit::StripLeft | Hit::StripRight | Hit::JoinPlace(_) => {
                         self.handle_button(released_hit);
@@ -1353,6 +1368,7 @@ impl ApplicationHandler<UserEvent> for App {
     fn window_event(&mut self, elwt: &ActiveEventLoop, _window_id: winit::window::WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => {
+                self.stop_local_script();
                 self.send_command(Command::Shutdown);
                 elwt.exit();
             }
@@ -1402,7 +1418,7 @@ impl ApplicationHandler<UserEvent> for App {
                                     &mut v.add_scroll,
                                     v.add_metrics.as_ref().map(|m| (m.content_h / m.h.max(1.0)).max(1.0)).unwrap_or(1.0),
                                 ),
-                                (MenuTab::Settings, _, SettingsTab::General) | (MenuTab::Settings, _, SettingsTab::Appearance) | (MenuTab::Settings, _, SettingsTab::Logs) => (
+                                (MenuTab::Settings, _, SettingsTab::General) | (MenuTab::Settings, _, SettingsTab::Appearance) | (MenuTab::Settings, _, SettingsTab::Scripts) | (MenuTab::Settings, _, SettingsTab::Logs) => (
                                     &mut v.settings_scroll,
                                     v.settings_metrics.as_ref().map(|m| (m.content_h / m.h.max(1.0)).max(1.0)).unwrap_or(1.0),
                                 ),
@@ -1489,6 +1505,8 @@ impl ApplicationHandler<UserEvent> for App {
                                 | Hit::RadiusUp | Hit::RadiusDown | Hit::ColorPrev(_)
                                 | Hit::ColorNext(_) | Hit::ResetAppearance | Hit::CancelAdd
                                 | Hit::ClearField(_)
+                                | Hit::SelectScript(_) | Hit::RefreshScripts | Hit::RunScript
+                                | Hit::StopScript | Hit::OpenScript | Hit::OpenScriptsFolder
                                 | Hit::CopyLogs | Hit::SaveLogs | Hit::ClearLogs
                                 | Hit::StripLeft | Hit::StripRight | Hit::JoinPlace(_) => {
                                     self.handle_button(released_hit);
@@ -1660,6 +1678,10 @@ impl ApplicationHandler<UserEvent> for App {
 
         // Compute the earliest wake-up for animations / timers.
         let mut wake: Option<Instant> = self.schedule_anim();
+        if self.script_child.is_some() {
+            let script_poll = now + Duration::from_millis(120);
+            wake = Some(wake.map(|current| current.min(script_poll)).unwrap_or(script_poll));
+        }
         if let Screen::Menu(v) = &self.screen {
             if !v.refreshing {
                 if let Some(next) = v.next_refresh {
@@ -1728,6 +1750,161 @@ impl App {
             }
         }
         self.needs_redraw = true;
+    }
+
+
+    fn set_script_status(&mut self, running: bool, status: String) {
+        if let Screen::Menu(view) = &mut self.screen {
+            view.scripts.running = running;
+            view.scripts.status = status.clone();
+        } else if let Some(view) = &mut self.suspended_menu {
+            view.scripts.running = running;
+            view.scripts.status = status;
+        }
+        self.request_redraw();
+    }
+
+    fn append_script_output(&mut self, lines: Vec<String>) {
+        if lines.is_empty() {
+            return;
+        }
+        if let Screen::Menu(view) = &mut self.screen {
+            for line in lines {
+                view.scripts.push_output(line);
+            }
+        } else if let Some(view) = &mut self.suspended_menu {
+            for line in lines {
+                view.scripts.push_output(line);
+            }
+        }
+        self.request_redraw();
+    }
+
+    fn drain_local_script_log(&mut self) {
+        let Some(path) = self.script_log_file.clone() else {
+            return;
+        };
+        let Ok(bytes) = std::fs::read(path) else {
+            return;
+        };
+        if bytes.len() <= self.script_log_bytes {
+            return;
+        }
+
+        let remaining = &bytes[self.script_log_bytes..];
+        let Some(last_newline) = remaining.iter().rposition(|byte| *byte == b'\n') else {
+            return;
+        };
+        let consumed = last_newline + 1;
+        let text = String::from_utf8_lossy(&remaining[..consumed]);
+        let lines = text
+            .lines()
+            .map(str::to_owned)
+            .collect::<Vec<String>>();
+        self.script_log_bytes += consumed;
+        self.append_script_output(lines);
+    }
+
+    fn poll_local_script(&mut self) {
+        self.drain_local_script_log();
+        let outcome = match self.script_child.as_mut() {
+            Some(child) => match child.try_wait() {
+                Ok(Some(status)) => Some(Ok(status.success())),
+                Ok(None) => None,
+                Err(error) => Some(Err(error.to_string())),
+            },
+            None => None,
+        };
+
+        if let Some(outcome) = outcome {
+            self.script_child = None;
+            self.drain_local_script_log();
+            match outcome {
+                Ok(true) => self.set_script_status(false, "Script completed successfully.".into()),
+                Ok(false) => self.set_script_status(false, "Script exited with an error. See output.".into()),
+                Err(error) => self.set_script_status(false, format!("Could not read script exit status: {error}")),
+            }
+        }
+    }
+
+    fn start_local_script(&mut self) {
+        if self.script_child.is_some() {
+            self.set_script_status(true, "A local script is already running.".into());
+            return;
+        }
+
+        let selected = match &self.screen {
+            Screen::Menu(view) => view.scripts.selected_path(),
+            _ => None,
+        };
+        let Some(script_path) = selected else {
+            self.set_script_status(false, "Select a .lua or .luau file first.".into());
+            return;
+        };
+
+        let root = crate::script_workspace::project_root();
+        let Some(runner) = crate::script_workspace::runner_path() else {
+            self.set_script_status(
+                false,
+                "Luau runner not found. Build it with BUILD_AEVORA.bat first.".into(),
+            );
+            return;
+        };
+
+        let log_path = std::env::temp_dir().join(format!("aevora-script-{}.log", std::process::id()));
+        let log_file = match File::create(&log_path) {
+            Ok(file) => file,
+            Err(error) => {
+                self.set_script_status(false, format!("Could not create script output log: {error}"));
+                return;
+            }
+        };
+        let stdout = match log_file.try_clone() {
+            Ok(file) => file,
+            Err(error) => {
+                self.set_script_status(false, format!("Could not prepare script output: {error}"));
+                return;
+            }
+        };
+
+        let child = ProcessCommand::new(&runner)
+            .arg("--script")
+            .arg(&script_path)
+            .arg("--timeout-ms")
+            .arg("15000")
+            .arg("--memory-mb")
+            .arg("128")
+            .current_dir(&root)
+            .stdout(Stdio::from(stdout))
+            .stderr(Stdio::from(log_file))
+            .spawn();
+
+        match child {
+            Ok(child) => {
+                let label = crate::script_workspace::display_path(&script_path);
+                self.script_child = Some(child);
+                self.script_log_file = Some(log_path);
+                self.script_log_bytes = 0;
+                if let Screen::Menu(view) = &mut self.screen {
+                    view.scripts.output.clear();
+                    view.scripts.running = true;
+                    view.scripts.status = format!("Running {label} in the offline Luau sandbox…");
+                }
+                self.request_redraw();
+            }
+            Err(error) => self.set_script_status(false, format!("Could not start Luau runner: {error}")),
+        }
+    }
+
+    fn stop_local_script(&mut self) {
+        let Some(mut child) = self.script_child.take() else {
+            self.set_script_status(false, "No local script is running.".into());
+            return;
+        };
+        let _ = child.kill();
+        let _ = child.wait();
+        self.drain_local_script_log();
+        self.set_script_status(false, "Stopped local script.".into());
     }
 
     fn handle_button(&mut self, hit: Hit) {
@@ -1874,7 +2051,8 @@ impl App {
                 if let Screen::Menu(v) = &mut self.screen {
                     v.settings.tab = match i {
                         1 => SettingsTab::Appearance,
-                        2 => SettingsTab::Logs,
+                        2 => SettingsTab::Scripts,
+                        3 => SettingsTab::Logs,
                         _ => SettingsTab::General,
                     };
                     // The Logs pane opens pinned to the newest line.
@@ -1882,6 +2060,52 @@ impl App {
                     v.settings_scroll = 0.0;
                 }
                 self.focus = None;
+                self.needs_redraw = true;
+            }
+            Hit::SelectScript(index) => {
+                if let Screen::Menu(v) = &mut self.screen {
+                    if index < v.scripts.files.len() {
+                        v.scripts.selected = Some(index);
+                        v.scripts.status = format!(
+                            "Selected {}",
+                            crate::script_workspace::display_path(&v.scripts.files[index])
+                        );
+                    }
+                }
+                self.needs_redraw = true;
+            }
+            Hit::RefreshScripts => {
+                if let Screen::Menu(v) = &mut self.screen {
+                    v.scripts.refresh();
+                }
+                self.needs_redraw = true;
+            }
+            Hit::RunScript => self.start_local_script(),
+            Hit::StopScript => self.stop_local_script(),
+            Hit::OpenScript => {
+                let selected = match &self.screen {
+                    Screen::Menu(v) => v.scripts.selected_path(),
+                    _ => None,
+                };
+                if let Some(path) = selected {
+                    match crate::script_workspace::open_in_editor(&path) {
+                        Ok(()) => self.set_script_status(
+                            false,
+                            format!("Opened {} in the system editor.", crate::script_workspace::display_path(&path)),
+                        ),
+                        Err(error) => self.set_script_status(
+                            false,
+                            format!("Could not open editor: {error}"),
+                        ),
+                    }
+                }
+                self.needs_redraw = true;
+            }
+            Hit::OpenScriptsFolder => {
+                match crate::script_workspace::open_scripts_folder() {
+                    Ok(()) => self.set_script_status(false, "Opened the scripts folder.".into()),
+                    Err(error) => self.set_script_status(false, format!("Could not open scripts folder: {error}")),
+                }
                 self.needs_redraw = true;
             }
             Hit::CopyLogs => {
