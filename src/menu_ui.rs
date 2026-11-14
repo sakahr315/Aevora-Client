@@ -1605,7 +1605,7 @@ fn draw_scripts(
                 row.w,
                 row.h,
                 (6.0 * s) as i32,
-                if selected { t.surface_3 } else { t.surface_2 },
+                if selected { t.surface_2 } else { t.surface_2 },
             );
             let label = crate::script_workspace::display_path(path);
             font::draw_ellipsis(
