@@ -10,6 +10,7 @@ if errorlevel 1 (
 
 if "%~1"=="" (
     echo Usage:
+    echo   RUN_LUAU.bat --list
     echo   RUN_LUAU.bat --script scripts\examples\hello.luau
     echo   RUN_LUAU.bat --script scripts\examples\worker-info.luau --instances 8
     exit /b 2
