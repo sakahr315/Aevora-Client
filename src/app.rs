@@ -2089,9 +2089,10 @@ impl App {
                     _ => None,
                 };
                 if let Some(path) = selected {
+                    let still_running = self.script_child.is_some();
                     match crate::script_workspace::open_in_editor(&path) {
                         Ok(()) => self.set_script_status(
-                            self.script_child.is_some(),
+                            still_running,
                             format!("Opened {} in the system editor.", crate::script_workspace::display_path(&path)),
                         ),
                         Err(error) => self.set_script_status(
@@ -2103,8 +2104,9 @@ impl App {
                 self.needs_redraw = true;
             }
             Hit::OpenScriptsFolder => {
+                let still_running = self.script_child.is_some();
                 match crate::script_workspace::open_scripts_folder() {
-                    Ok(()) => self.set_script_status(self.script_child.is_some(), "Opened the scripts folder.".into()),
+                    Ok(()) => self.set_script_status(still_running, "Opened the scripts folder.".into()),
                     Err(error) => self.set_script_status(false, format!("Could not open scripts folder: {error}")),
                 }
                 self.needs_redraw = true;
