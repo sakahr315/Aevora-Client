@@ -20,6 +20,8 @@ jobs:
       # unrelated application source as part of this feature branch.
       - name: Check Luau runner formatting
         run: cargo fmt --manifest-path tools/aevora-luau/Cargo.toml -- --check
+      - name: Test Luau runner
+        run: cargo test --manifest-path tools/aevora-luau/Cargo.toml
       - name: Test desktop client
         run: cargo test --workspace
       - name: Build Luau runner
@@ -28,3 +30,19 @@ jobs:
         run: cargo run --manifest-path tools/aevora-luau/Cargo.toml -- --script scripts/examples/hello.luau
       - name: Run isolated-worker smoke test
         run: cargo run --manifest-path tools/aevora-luau/Cargo.toml -- --script scripts/examples/worker-info.luau --instances 2
+
+
+  windows-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build Aevora for Windows
+        run: cargo build --release --bin aevora-client
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: aevora-client-windows-x64
+          path: target/release/aevora-client.exe
+          if-no-files-found: error
