@@ -1,0 +1,9 @@
+[package]
+name = "aevora-luau"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Offline Luau runner for Aevora local development"
+
+[dependencies]
+mlua = { version = "0.10", features = ["luau", "vendored"] }
