@@ -1639,7 +1639,9 @@ fn draw_scripts(
         BtnStyle::Primary,
         !has_selection || v.scripts.running,
     );
-    ctx.hits.add(run, Hit::RunScript);
+    if has_selection && !v.scripts.running {
+        ctx.hits.add(run, Hit::RunScript);
+    }
     let stop = draw_button(
         ctx,
         fb,
@@ -1648,7 +1650,9 @@ fn draw_scripts(
         BtnStyle::Secondary,
         !v.scripts.running,
     );
-    ctx.hits.add(stop, Hit::StopScript);
+    if v.scripts.running {
+        ctx.hits.add(stop, Hit::StopScript);
+    }
     let edit = draw_button(
         ctx,
         fb,
@@ -1662,7 +1666,9 @@ fn draw_scripts(
         BtnStyle::Secondary,
         !has_selection,
     );
-    ctx.hits.add(edit, Hit::OpenScript);
+    if has_selection {
+        ctx.hits.add(edit, Hit::OpenScript);
+    }
     *y += 42.0 * s;
 
     font::draw_ellipsis(
