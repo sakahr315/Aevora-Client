@@ -322,3 +322,48 @@ fn main() -> ExitCode {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temporary_script(contents: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock should be after the Unix epoch")
+            .as_nanos();
+        let path = env::temp_dir().join(format!(
+            "aevora-luau-test-{}-{nonce}.luau",
+            std::process::id()
+        ));
+        fs::write(&path, contents).expect("test script should be written");
+        path
+    }
+
+    #[test]
+    fn exposes_local_worker_metadata() {
+        let path = temporary_script(
+            r#"
+                assert(Aevora.instanceIndex == 2)
+                assert(Aevora.instanceCount == 4)
+                assert(Aevora.instanceName == "local-02")
+            "#,
+        );
+        let result = run_local(&path, 2, 4, 5_000, 64);
+        let _ = fs::remove_file(path);
+        assert!(result.is_ok(), "unexpected runner error: {result:?}");
+    }
+
+    #[test]
+    fn interrupts_an_endless_script_at_the_deadline() {
+        let path = temporary_script("while true do end");
+        let result = run_local(&path, 1, 1, 100, 64);
+        let _ = fs::remove_file(path);
+        let error = result.expect_err("an endless loop must time out");
+        assert!(
+            error.contains("timed out"),
+            "expected timeout error, got: {error}"
+        );
+    }
+}
