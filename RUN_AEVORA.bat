@@ -1,5 +1,6 @@
 @echo off
 setlocal
+cd /d "%~dp0"
 if not exist "%~dp0target\release\aevora-client.exe" (
     echo Aevora has not been built yet.
     echo Run BUILD_AEVORA.bat first.
