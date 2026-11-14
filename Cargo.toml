@@ -3,10 +3,12 @@ name = "rustblox"
 version = "0.2.0"
 edition = "2021"
 license = "GPL-3.0-only"
-description = "Open-source Roblox client built in Rust. wgpu-accelerated UI + 3D place renderer with live server join."
-repository = "https://github.com/TumRedSun/rustblox"
+description = "Aevora Client: an independent Rust desktop client with a wgpu UI and 3D place renderer."
+repository = "https://github.com/sakahr315/Aevora-Client"
 keywords = ["roblox", "client", "rust", "gpl"]
 categories = ["games", "network-programming"]
+autobins = false
+default-run = "aevora-client"
 
 # Workspace: the mobile/ member carries the Android/iOS harness (cdylib +
 # staticlib). Default members keep plain `cargo build` / `cargo test`
@@ -14,6 +16,11 @@ categories = ["games", "network-programming"]
 [workspace]
 members = ["mobile"]
 default-members = ["."]
+exclude = ["tools/aevora-luau"]
+
+[[bin]]
+name = "aevora-client"
+path = "src/main.rs"
 
 [dependencies]
 winit = "0.30.13"

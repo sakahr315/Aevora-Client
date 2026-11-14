@@ -1,8 +1,8 @@
-# RustBlox
+# Aevora Client
 
 **EN** | [RU ниже](#rustblox-ru)
 
-An open-source (**GPL-3.0**) third-party **Roblox client built in Rust**, using the official Roblox web APIs — the same endpoints the official website and official clients talk to. No protocol emulation, no private servers: everything goes to real Roblox infrastructure.
+Aevora is an independent, open-source (**GPL-3.0**) third-party **Roblox client built in Rust**. It uses Roblox web APIs and its own client window, renderer and networking code; it does not launch the official Roblox Player. It is not affiliated with Roblox Corporation.
 
 **Milestone 2 scope (this release):**
 - **Everything from Milestone 1** (login + friends menu, see below)
@@ -42,8 +42,9 @@ Every UI primitive records into a GPU command list (`draw.rs` keeps the exact sa
 Rust 1.77+ (install via [rustup](https://rustup.rs)):
 
 ```bash
-cargo build --release
-# binary: target/release/rustblox
+cargo build --release --bin aevora-client
+# Windows: target/release/aevora-client.exe
+# Linux/macOS: target/release/aevora-client
 ```
 
 Works on **Windows, Linux and macOS** out of the box (TLS via rustls, no system dependencies). Rendering uses wgpu (Vulkan / Metal / DX12 / GL fallback).
@@ -141,6 +142,21 @@ The UI thread never blocks: all network work runs on a worker thread (plus a 4-t
 - On-demand redraws (no busy render loop): the event loop sleeps until the next animation tick (spinner/caret/countdown) or the next scheduled refresh.
 - Only visible list rows are rasterized per frame; avatars only decoded once per URL version.
 - Presence, games and thumbnails requests are batched in ≤100-id chunks per API limits.
+
+## Aevora custom scripting (local development)
+
+The repository includes a separate Rust-hosted Luau runner for pure Luau logic.
+Run one script or run it in multiple isolated local test processes:
+
+```powershell
+cargo run --manifest-path tools/aevora-luau/Cargo.toml -- --script scripts/examples/hello.luau
+cargo run --manifest-path tools/aevora-luau/Cargo.toml -- --script scripts/examples/worker-info.luau --instances 8
+```
+
+Each local worker has its own Luau VM, heap cap and execution deadline. These
+workers are not Roblox accounts or live game sessions and do not expose the
+Roblox DataModel or game services. See [docs/SCRIPTING.md](docs/SCRIPTING.md)
+for the current scripting boundary and remaining work.
 
 ## Roadmap
 

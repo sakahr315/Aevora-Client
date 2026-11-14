@@ -17,6 +17,7 @@ pub mod net;
 pub mod netlog;
 pub mod platform;
 pub mod raknet;
+pub mod script_workspace;
 pub mod roblox;
 pub mod theme;
 pub mod ui;

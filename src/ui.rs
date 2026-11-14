@@ -73,7 +73,7 @@ pub enum Hit {
     ThemePreset(u8),
     /// Settings: recommendations on/off toggle.
     ToggleRecommendations,
-    /// Appearance tab: settings sub-tabs (0 = general, 1 = appearance).
+    /// Settings sub-tabs: 0 = general, 1 = appearance, 2 = scripts, 3 = logs.
     SettingsTab(u8),
     /// Appearance tab: global corner radius +/-.
     RadiusUp,
@@ -85,6 +85,13 @@ pub enum Hit {
     ResetAppearance,
     /// Settings → Logs: copy the whole diagnostic log buffer to the clipboard.
     CopyLogs,
+    /// Local script workspace actions.
+    SelectScript(usize),
+    RefreshScripts,
+    RunScript,
+    StopScript,
+    OpenScript,
+    OpenScriptsFolder,
     /// Settings → Logs: save the persistent log file into the user-visible
     /// Downloads location (Android MediaStore) — the no-root way to send a
     /// full crash report.
