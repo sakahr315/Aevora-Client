@@ -40,9 +40,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build Aevora for Windows
         run: cargo build --release --bin aevora-client
-      - name: Upload Windows executable
+      - name: Build Luau runner for Windows
+        run: cargo build --manifest-path tools/aevora-luau/Cargo.toml --release
+      - name: Upload Windows executables
         uses: actions/upload-artifact@v4
         with:
           name: aevora-client-windows-x64
-          path: target/release/aevora-client.exe
+          path: |
+            target/release/aevora-client.exe
+            tools/aevora-luau/target/release/aevora-luau.exe
           if-no-files-found: error
