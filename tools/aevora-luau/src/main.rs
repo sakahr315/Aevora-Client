@@ -116,7 +116,6 @@ fn parse_args() -> Result<Option<Args>, String> {
     }))
 }
 
-
 fn collect_scripts(directory: &Path, scripts: &mut Vec<PathBuf>) -> Result<(), String> {
     let entries = fs::read_dir(directory)
         .map_err(|error| format!("could not read {}: {error}", directory.display()))?;
