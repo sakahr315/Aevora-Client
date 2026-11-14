@@ -16,5 +16,10 @@ if "%~1"=="" (
     exit /b 2
 )
 
+if exist "%~dp0tools\aevora-luau\target\release\aevora-luau.exe" goto run_built
 cargo run --manifest-path tools\aevora-luau\Cargo.toml -- %*
+exit /b %errorlevel%
+
+:run_built
+"%~dp0tools\aevora-luau\target\release\aevora-luau.exe" %*
 exit /b %errorlevel%
