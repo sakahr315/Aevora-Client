@@ -51,10 +51,12 @@ Use Roblox Studio's own test/play environment to exercise scripts against an exp
 
 The sandbox and quotas reduce accidental runaway execution, but this is not a hardened operating-system security boundary. Do not run scripts from untrusted sources.
  
+## Desktop UI
+
+Open **Settings → Scripts** in Aevora to refresh the local file list, select a script, open it in the system text editor, run it, stop it, and inspect its output. The UI launches the standalone local runner and polls its process without blocking the render/event loop. The editor itself is external (for example, Notepad on Windows), not an embedded code editor.
+
 ## Still not implemented
 
-- Embedded editor and script browser in the Aevora desktop UI.
-- Script persistence/settings UI inside the desktop client.
-- GUI run/stop controls and per-script output panes.
+- Embedded code editor with syntax highlighting and multi-file tabs.
 - Roblox Studio integration or a full Roblox DataModel implementation.
 - Resource accounting for the full OS process (the Luau heap limit applies to the VM).
