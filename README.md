@@ -1,8 +1,8 @@
-# RustBlox
+# Aevora Client
 
 **EN** | [RU ниже](#rustblox-ru)
 
-An open-source (**GPL-3.0**) third-party **Roblox client built in Rust**, using the official Roblox web APIs — the same endpoints the official website and official clients talk to. No protocol emulation, no private servers: everything goes to real Roblox infrastructure.
+An open-source (**GPL-3.0**) third-party **Roblox client built in Rust**, maintained as Aevora Client., using the official Roblox web APIs — the same endpoints the official website and official clients talk to. No protocol emulation, no private servers: everything goes to real Roblox infrastructure.
 
 **Milestone 2 scope (this release):**
 - **Everything from Milestone 1** (login + friends menu, see below)
@@ -141,6 +141,19 @@ The UI thread never blocks: all network work runs on a worker thread (plus a 4-t
 - On-demand redraws (no busy render loop): the event loop sleeps until the next animation tick (spinner/caret/countdown) or the next scheduled refresh.
 - Only visible list rows are rasterized per frame; avatars only decoded once per URL version.
 - Presence, games and thumbnails requests are batched in ≤100-id chunks per API limits.
+
+## Aevora custom scripting (early)
+
+Aevora includes an initial standalone Luau runner for local development. Add
+`.lua` or `.luau` files under [scripts/](scripts/) and run the example with:
+
+```powershell
+cargo run --manifest-path tools/aevora-luau/Cargo.toml -- --script scripts/examples/hello.luau
+```
+
+This is an offline development runtime for pure Luau logic. It does not expose
+Roblox services, live-game injection, executor APIs, or anti-cheat bypasses.
+See [docs/SCRIPTING.md](docs/SCRIPTING.md) for current capabilities and gaps.
 
 ## Roadmap
 
