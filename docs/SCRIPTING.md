@@ -1,32 +1,54 @@
-# Aevora scripting roadmap
+# Aevora scripting workspace
 
 ## Available now
 
-- A standalone Luau runner under `tools/aevora-luau`.
-- Custom `.lua` and `.luau` files under `scripts/`.
-- Console output through `print()` and warnings through `warn()`.
-- An offline runtime with common OS, filesystem, dynamic-loader, and debug
-  globals removed.
-- A checked-in example at `scripts/examples/hello.luau`.
+- A standalone Rust-hosted Luau runner under \`tools/aevora-luau\`.
+- Custom \`.lua\` and \`.luau\` files under \`scripts/\`.
+- Console output through \`print()\` and \`warn()\`.
+- An offline Luau sandbox with the global environment and builtin libraries made read-only.
+- Per-worker Luau heap limits and execution deadlines.
+- Parallel local test workers. Every worker is a separate operating-system process with an independent Luau state.
+- A small \`Aevora\` metadata table available to test scripts:
+  - \`Aevora.instanceIndex\`
+  - \`Aevora.instanceCount\`
+  - \`Aevora.instanceName\`
 
 ## Build and run
 
-Requires the Rust toolchain used by the main project.
+Requires a Rust toolchain.
 
-```powershell
-cargo run --manifest-path tools/aevora-luau/Cargo.toml -- --help
+Run one script:
+
+\`\`\`powershell
 cargo run --manifest-path tools/aevora-luau/Cargo.toml -- --script scripts/examples/hello.luau
-```
+\`\`\`
 
-## Not implemented yet
+Run the same script in eight isolated local workers:
 
-- Embedded editor and script browser in the desktop UI.
-- Script persistence/settings UI.
-- Run/stop controls and per-script output panes.
-- Instruction and memory quotas.
-- Roblox DataModel bindings and Studio integration.
-- Live-game script injection or executor compatibility.
+\`\`\`powershell
+cargo run --manifest-path tools/aevora-luau/Cargo.toml -- --script scripts/examples/worker-info.luau --instances 8
+\`\`\`
 
-The runtime is deliberately separate from the live client networking code.
-Future integration should preserve that separation and only expose documented,
-least-privilege APIs for local test worlds or experiences the developer owns.
+Tune each worker's limits:
+
+\`\`\`powershell
+cargo run --manifest-path tools/aevora-luau/Cargo.toml -- --script scripts/examples/hello.luau --instances 4 --timeout-ms 3000 --memory-mb 96
+\`\`\`
+
+The runner accepts 1-32 workers, a 100-60000 ms execution deadline, and an 8-1024 MB Luau heap limit per worker. The process manager starts all workers concurrently and returns a failure exit code if any worker fails.
+
+## Important boundaries
+
+These workers are **local Luau test processes**, not Roblox accounts or live game sessions. They do not log in to Roblox, join public servers, load a Roblox DataModel, or provide \`game\`, \`workspace\`, Roblox services, HTTP, filesystem access, or executor APIs. A Roblox script that depends on those APIs will not run in this standalone environment.
+
+Use Roblox Studio's own test/play environment to exercise scripts against an experience you own or are authorized to develop. Aevora's local runner is for pure Luau modules, logic tests, and parallel script stress tests.
+
+The sandbox and quotas reduce accidental runaway execution, but this is not a hardened operating-system security boundary. Do not run scripts from untrusted sources.
+ 
+## Still not implemented
+
+- Embedded editor and script browser in the Aevora desktop UI.
+- Script persistence/settings UI inside the desktop client.
+- GUI run/stop controls and per-script output panes.
+- Roblox Studio integration or a full Roblox DataModel implementation.
+- Resource accounting for the full OS process (the Luau heap limit applies to the VM).
