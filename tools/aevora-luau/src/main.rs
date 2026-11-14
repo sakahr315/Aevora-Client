@@ -183,6 +183,7 @@ fn run_local(
         .set("print", print)
         .map_err(|error| error.to_string())?;
 
+    let warn_prefix = prefix.clone();
     let warn = lua
         .create_function(move |_, values: Variadic<Value>| {
             let message = values
@@ -190,7 +191,7 @@ fn run_local(
                 .map(display_value)
                 .collect::<Vec<_>>()
                 .join("\t");
-            eprintln!("{prefix} [WARN] {message}");
+            eprintln!("{warn_prefix} [WARN] {message}");
             Ok(())
         })
         .map_err(|error| error.to_string())?;
