@@ -69,7 +69,7 @@ pub enum Hit {
     SwitchAccount(u64),
     /// Settings: open the login screen to add another account.
     AddAccount,
-    /// Settings: theme preset row (index into PRESETS + custom.
+    /// Settings: theme preset row (index into PRESETS + custom).
     ThemePreset(u8),
     /// Settings: recommendations on/off toggle.
     ToggleRecommendations,
