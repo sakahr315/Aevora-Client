@@ -194,6 +194,21 @@ impl ScriptsState {
             .and_then(|index| self.files.get(index))
             .cloned()
     }
+
+    pub fn refresh(&mut self) {
+        match crate::script_workspace::discover_scripts() {
+            Ok(files) => {
+                self.files = files;
+                self.selected = if self.files.is_empty() {
+                    None
+                } else {
+                    Some(self.selected.unwrap_or(0).min(self.files.len() - 1))
+                };
+                self.status = format!("{} local script(s) found.", self.files.len());
+            }
+            Err(error) => self.status = format!("Could not list scripts: {error}"),
+        }
+    }
 }
 
 pub struct MenuView {
@@ -1403,7 +1418,7 @@ fn draw_settings(v: &mut MenuView, ctx: &mut UiCtx, fb: &mut FB, x: i32, w: i32,
     let status_h = (theme::STATUSBAR_H * s) as i32;
 
     font::draw(ctx.fonts, fb, x as f32 + pad as f32, header_h as f32 / 2.0 + 9.5 * s, "Settings", 19.0 * s, t.text, true, 0.0);
-    let hint = "Account, themes and diagnostics";
+    let hint = "Account, themes, scripts and diagnostics";
     let hw = font::measure(ctx.fonts, hint, 12.5 * s, false);
     font::draw(
         ctx.fonts, fb, (x + w - pad) as f32 - hw, header_h as f32 / 2.0 + 12.5 * s * 0.35,
@@ -1412,11 +1427,13 @@ fn draw_settings(v: &mut MenuView, ctx: &mut UiCtx, fb: &mut FB, x: i32, w: i32,
     fb.hline(x, header_h, w, [0x1E, 0x20, 0x22, 0xFF]);
 
     let tab_h = (32.0 * s) as i32;
-    let tw = (((w - 2 * pad) as f32 - 2.0 * (8.0 * s)) / 3.0).min(120.0 * s) as i32;
+    let gap = (8.0 * s) as i32;
+    let tw = (((w - 2 * pad) as f32 - 3.0 * gap as f32) / 4.0).min(120.0 * s) as i32;
     let tabs_y = header_h + (tabs_h - tab_h) / 2;
     draw_seg_tab(ctx, fb, Rect { x: x + pad, y: tabs_y, w: tw, h: tab_h }, "General", v.settings.tab == SettingsTab::General, Hit::SettingsTab(0));
-    draw_seg_tab(ctx, fb, Rect { x: x + pad + tw + (8.0 * s) as i32, y: tabs_y, w: tw, h: tab_h }, "Appearance", v.settings.tab == SettingsTab::Appearance, Hit::SettingsTab(1));
-    draw_seg_tab(ctx, fb, Rect { x: x + pad + 2 * (tw + (8.0 * s) as i32), y: tabs_y, w: tw, h: tab_h }, "Logs", v.settings.tab == SettingsTab::Logs, Hit::SettingsTab(2));
+    draw_seg_tab(ctx, fb, Rect { x: x + pad + (tw + gap), y: tabs_y, w: tw, h: tab_h }, "Appearance", v.settings.tab == SettingsTab::Appearance, Hit::SettingsTab(1));
+    draw_seg_tab(ctx, fb, Rect { x: x + pad + 2 * (tw + gap), y: tabs_y, w: tw, h: tab_h }, "Scripts", v.settings.tab == SettingsTab::Scripts, Hit::SettingsTab(2));
+    draw_seg_tab(ctx, fb, Rect { x: x + pad + 3 * (tw + gap), y: tabs_y, w: tw, h: tab_h }, "Logs", v.settings.tab == SettingsTab::Logs, Hit::SettingsTab(3));
 
     let top = (header_h + tabs_h) as f32;
     let view_h = (h - status_h) as f32 - top;
@@ -1430,6 +1447,7 @@ fn draw_settings(v: &mut MenuView, ctx: &mut UiCtx, fb: &mut FB, x: i32, w: i32,
     let content_h = match v.settings.tab {
         SettingsTab::General => measure_general(v, s),
         SettingsTab::Appearance => measure_appearance(s),
+        SettingsTab::Scripts => measure_scripts(&v.scripts, s),
         SettingsTab::Logs => measure_logs(ctx.fonts, inner_w, s),
     };
     if v.settings.logs_follow && v.settings.tab == SettingsTab::Logs {
@@ -1445,6 +1463,7 @@ fn draw_settings(v: &mut MenuView, ctx: &mut UiCtx, fb: &mut FB, x: i32, w: i32,
     match v.settings.tab {
         SettingsTab::General => draw_general(v, ctx, fb, x + pad, &mut y, inner_w, s),
         SettingsTab::Appearance => draw_appearance(ctx, fb, x + pad, &mut y, inner_w, s, &mut v.app_settings),
+        SettingsTab::Scripts => draw_scripts(v, ctx, fb, x + pad, &mut y, inner_w, s),
         SettingsTab::Logs => draw_logs(ctx, fb, x + pad, &mut y, inner_w, s),
     }
     fb.set_clip(old_clip);
@@ -1489,6 +1508,217 @@ fn draw_settings(v: &mut MenuView, ctx: &mut UiCtx, fb: &mut FB, x: i32, w: i32,
 /// width. Newest lines sit at the bottom; the follow flag pins the view to
 /// the tail until the user scrolls up.
 const LOG_LINE_H: f32 = 17.0;
+
+
+fn measure_scripts(scripts: &ScriptsState, s: f32) -> f32 {
+    420.0 * s + scripts.files.len().min(40) as f32 * 31.0 * s
+}
+
+fn draw_scripts(
+    v: &mut MenuView,
+    ctx: &mut UiCtx,
+    fb: &mut FB,
+    x: i32,
+    y: &mut f32,
+    w: f32,
+    s: f32,
+) {
+    let t = theme::cur();
+    section_label(ctx, fb, x, y, "LOCAL LUAU SCRIPTS", s);
+    font::draw(
+        ctx.fonts,
+        fb,
+        x as f32,
+        *y + 5.0 * s,
+        "Pure Luau local tests — no Roblox game services are exposed.",
+        11.5 * s,
+        t.text_dim,
+        false,
+        0.0,
+    );
+    *y += 26.0 * s;
+
+    let refresh_rect = Rect {
+        x: x + (w as i32) - (94.0 * s) as i32 - (100.0 * s) as i32 - (8.0 * s) as i32,
+        y: *y as i32,
+        w: (94.0 * s) as i32,
+        h: (29.0 * s) as i32,
+    };
+    let folder_rect = Rect {
+        x: x + (w as i32) - (100.0 * s) as i32,
+        y: *y as i32,
+        w: (100.0 * s) as i32,
+        h: (29.0 * s) as i32,
+    };
+    let r = draw_button(ctx, fb, refresh_rect, "Refresh", BtnStyle::Secondary, false);
+    ctx.hits.add(r, Hit::RefreshScripts);
+    let r = draw_button(ctx, fb, folder_rect, "Open folder", BtnStyle::Secondary, false);
+    ctx.hits.add(r, Hit::OpenScriptsFolder);
+    *y += 39.0 * s;
+
+    font::draw(
+        ctx.fonts,
+        fb,
+        x as f32,
+        *y + 10.5 * s,
+        "SCRIPT FILES",
+        10.5 * s,
+        t.text_faint,
+        true,
+        0.0,
+    );
+    *y += 21.0 * s;
+
+    if v.scripts.files.is_empty() {
+        let empty = Rect {
+            x,
+            y: *y as i32,
+            w: w as i32,
+            h: (58.0 * s) as i32,
+        };
+        fb.rect_rounded(empty.x, empty.y, empty.w, empty.h, (8.0 * s) as i32, t.surface_2);
+        font::draw(
+            ctx.fonts,
+            fb,
+            (x as f32) + 12.0 * s,
+            *y + 22.0 * s,
+            "No scripts found. Add .lua or .luau files to scripts/.",
+            11.5 * s,
+            t.text_dim,
+            false,
+            0.0,
+        );
+        *y += 68.0 * s;
+    } else {
+        let row_h = 30.0 * s;
+        for (index, path) in v.scripts.files.iter().enumerate() {
+            let selected = v.scripts.selected == Some(index);
+            let row = Rect {
+                x,
+                y: *y as i32,
+                w: w as i32,
+                h: row_h as i32,
+            };
+            fb.rect_rounded(
+                row.x,
+                row.y,
+                row.w,
+                row.h,
+                (6.0 * s) as i32,
+                if selected { t.surface_3 } else { t.surface_2 },
+            );
+            let label = crate::script_workspace::display_path(path);
+            font::draw_ellipsis(
+                ctx.fonts,
+                fb,
+                (x as f32) + 10.0 * s,
+                *y + row_h * 0.5 + 4.0 * s,
+                &label,
+                11.5 * s,
+                if selected { t.text } else { t.text_dim },
+                selected,
+                w - 20.0 * s,
+            );
+            ctx.hits.add(row, Hit::SelectScript(index));
+            *y += row_h + 3.0 * s;
+        }
+        *y += 5.0 * s;
+    }
+
+    let btn_y = *y as i32;
+    let btn_h = (31.0 * s) as i32;
+    let run_w = (86.0 * s) as i32;
+    let stop_w = (86.0 * s) as i32;
+    let edit_w = (90.0 * s) as i32;
+    let has_selection = v.scripts.selected_path().is_some();
+    let run = draw_button(
+        ctx,
+        fb,
+        Rect { x, y: btn_y, w: run_w, h: btn_h },
+        "Run",
+        BtnStyle::Primary,
+        !has_selection || v.scripts.running,
+    );
+    ctx.hits.add(run, Hit::RunScript);
+    let stop = draw_button(
+        ctx,
+        fb,
+        Rect { x: x + run_w + (8.0 * s) as i32, y: btn_y, w: stop_w, h: btn_h },
+        "Stop",
+        BtnStyle::Secondary,
+        !v.scripts.running,
+    );
+    ctx.hits.add(stop, Hit::StopScript);
+    let edit = draw_button(
+        ctx,
+        fb,
+        Rect {
+            x: x + run_w + stop_w + (16.0 * s) as i32,
+            y: btn_y,
+            w: edit_w,
+            h: btn_h,
+        },
+        "Edit file",
+        BtnStyle::Secondary,
+        !has_selection,
+    );
+    ctx.hits.add(edit, Hit::OpenScript);
+    *y += 42.0 * s;
+
+    font::draw_ellipsis(
+        ctx.fonts,
+        fb,
+        x as f32,
+        *y + 10.5 * s,
+        &v.scripts.status,
+        11.5 * s,
+        if v.scripts.running { t.blue } else { t.text_dim },
+        false,
+        w,
+    );
+    *y += 25.0 * s;
+
+    section_label(ctx, fb, x, y, "OUTPUT", s);
+    let console_h = (142.0 * s) as i32;
+    let console = Rect {
+        x,
+        y: *y as i32,
+        w: w as i32,
+        h: console_h,
+    };
+    fb.rect_rounded(console.x, console.y, console.w, console.h, (8.0 * s) as i32, t.surface_2);
+    let inner_lines = 7usize;
+    let start = v.scripts.output.len().saturating_sub(inner_lines);
+    if v.scripts.output.is_empty() {
+        font::draw(
+            ctx.fonts,
+            fb,
+            (x as f32) + 10.0 * s,
+            *y + 20.0 * s,
+            "Run a selected script to see output here.",
+            11.0 * s,
+            t.text_faint,
+            false,
+            0.0,
+        );
+    } else {
+        for (line_index, line) in v.scripts.output.iter().skip(start).enumerate() {
+            let line_y = *y + (18.0 + line_index as f32 * 17.0) * s;
+            font::draw_ellipsis(
+                ctx.fonts,
+                fb,
+                (x as f32) + 10.0 * s,
+                line_y,
+                line,
+                10.5 * s,
+                t.text_dim,
+                false,
+                w - 20.0 * s,
+            );
+        }
+    }
+    *y += console_h as f32 + 14.0 * s;
+}
 
 fn measure_logs(fonts: &Fonts, inner_w: f32, s: f32) -> f32 {
     let px = 11.5 * s;
