@@ -14,6 +14,7 @@ const MAX_MEMORY_MB: usize = 1_024;
 #[derive(Debug)]
 struct Args {
     script: PathBuf,
+    list_scripts: bool,
     instances: usize,
     timeout_ms: u64,
     memory_mb: usize,
@@ -28,6 +29,7 @@ fn usage() {
     eprintln!("  aevora-luau --script <file.luau> [options]");
     eprintln!();
     eprintln!("Options:");
+    eprintln!("      --list                List .lua/.luau files under scripts/");
     eprintln!("  -s, --script <path>       Luau script to run");
     eprintln!("  -n, --instances <count>   Run isolated local workers in parallel (1-32)");
     eprintln!("      --timeout-ms <ms>     Per-worker execution deadline (100-60000)");
@@ -47,6 +49,7 @@ fn parse_value<T: std::str::FromStr>(name: &str, value: Option<String>) -> Resul
 fn parse_args() -> Result<Option<Args>, String> {
     let mut args = env::args().skip(1);
     let mut script = None;
+    let mut list_scripts = false;
     let mut instances = 1usize;
     let mut timeout_ms = DEFAULT_TIMEOUT_MS;
     let mut memory_mb = DEFAULT_MEMORY_MB;
@@ -55,6 +58,7 @@ fn parse_args() -> Result<Option<Args>, String> {
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            "--list" => list_scripts = true,
             "--script" | "-s" => script = args.next().map(PathBuf::from),
             "--instances" | "-n" => {
                 instances = parse_value("--instances", args.next())?;
@@ -87,7 +91,11 @@ fn parse_args() -> Result<Option<Args>, String> {
         }
     }
 
-    let script = script.ok_or_else(|| "missing --script <path>".to_owned())?;
+    let script = match script {
+        Some(path) => path,
+        None if list_scripts => PathBuf::from("scripts"),
+        None => return Err("missing --script <path> (or use --list)".to_owned()),
+    };
     if worker_index.is_some() != worker_count.is_some() {
         return Err("invalid internal worker arguments".to_owned());
     }
@@ -99,12 +107,54 @@ fn parse_args() -> Result<Option<Args>, String> {
 
     Ok(Some(Args {
         script,
+        list_scripts,
         instances,
         timeout_ms,
         memory_mb,
         worker_index,
         worker_count,
     }))
+}
+
+
+fn collect_scripts(directory: &Path, scripts: &mut Vec<PathBuf>) -> Result<(), String> {
+    let entries = fs::read_dir(directory)
+        .map_err(|error| format!("could not read {}: {error}", directory.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let path = entry.path();
+        let file_type = entry.file_type().map_err(|error| error.to_string())?;
+        if file_type.is_dir() {
+            collect_scripts(&path, scripts)?;
+        } else if file_type.is_file() {
+            let extension = path
+                .extension()
+                .and_then(|value| value.to_str())
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            if extension == "lua" || extension == "luau" {
+                scripts.push(path);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn list_scripts(directory: &Path) -> Result<(), String> {
+    let mut scripts = Vec::new();
+    collect_scripts(directory, &mut scripts)?;
+    scripts.sort();
+
+    println!("[Aevora] Scripts in {}:", directory.display());
+    if scripts.is_empty() {
+        println!("  No .lua or .luau files found.");
+    } else {
+        for script in &scripts {
+            println!("  {}", script.display());
+        }
+    }
+    println!("[Aevora] {} script(s) found.", scripts.len());
+    Ok(())
 }
 
 fn display_value(value: &Value) -> String {
@@ -298,6 +348,16 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+
+    if args.list_scripts {
+        return match list_scripts(&args.script) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("[Aevora] {error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
 
     if args.worker_index.is_none() && args.instances > 1 {
         return match spawn_workers(&args) {
