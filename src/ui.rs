@@ -69,7 +69,7 @@ pub enum Hit {
     SwitchAccount(u64),
     /// Settings: open the login screen to add another account.
     AddAccount,
-    /// Settings: theme preset row (index into PRESETS + custom).
+    /// Local script workspace actions.
     ThemePreset(u8),
     /// Settings: recommendations on/off toggle.
     ToggleRecommendations,
@@ -84,6 +84,13 @@ pub enum Hit {
     /// Appearance tab: restore default (dark) colors.
     ResetAppearance,
     /// Settings → Logs: copy the whole diagnostic log buffer to the clipboard.
+    SelectScript(usize),
+    RefreshScripts,
+    RunScript,
+    StopScript,
+    OpenScript,
+    OpenScriptsFolder,
+    /// Settings: theme preset row (index into PRESETS + custom).
     CopyLogs,
     /// Settings → Logs: save the persistent log file into the user-visible
     /// Downloads location (Android MediaStore) — the no-root way to send a
