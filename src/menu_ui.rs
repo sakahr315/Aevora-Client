@@ -1511,7 +1511,7 @@ const LOG_LINE_H: f32 = 17.0;
 
 
 fn measure_scripts(scripts: &ScriptsState, s: f32) -> f32 {
-    420.0 * s + scripts.files.len().min(40) as f32 * 31.0 * s
+    420.0 * s + scripts.files.len() as f32 * 33.0 * s
 }
 
 fn draw_scripts(
