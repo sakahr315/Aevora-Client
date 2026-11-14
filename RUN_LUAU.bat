@@ -1,0 +1,19 @@
+@echo off
+setlocal
+cd /d "%~dp0"
+
+where cargo >nul 2>nul
+if errorlevel 1 (
+    echo Rust and Cargo are required. Install them from https://rustup.rs
+    exit /b 1
+)
+
+if "%~1"=="" (
+    echo Usage:
+    echo   RUN_LUAU.bat --script scripts\examples\hello.luau
+    echo   RUN_LUAU.bat --script scripts\examples\worker-info.luau --instances 8
+    exit /b 2
+)
+
+cargo run --manifest-path tools\aevora-luau\Cargo.toml -- %*
+exit /b %errorlevel%
