@@ -1,5 +1,5 @@
 //! Main menu, Roblox-style: a collapsible left sidebar (the rotated red logo
-//! tile doubles as the "R" of the wordmark and clicking it refreshes + jumps
+//! tile doubles as the "A" of the wordmark and clicking it refreshes + jumps
 //! to the top of Home), a horizontal friends strip, a places search bar and
 //! a sectioned card grid (Recently played + Recommended). The Friends tab
 //! opens on incoming friend requests (accept / decline) with a search pane
@@ -310,7 +310,7 @@ fn draw_sidebar(v: &mut MenuView, ctx: &mut UiCtx, fb: &mut FB, w: i32, h: i32) 
     ctx.hits.add(tgr, Hit::SidebarToggle);
     let mut y = tgr.y + tgr.h + (10.0 * s) as i32;
 
-    // Logo: the slightly rotated red tile IS the "R" of the wordmark.
+    // Logo: the slightly rotated red tile IS the "A" of the wordmark.
     // Clicking it refreshes and jumps to the top of the Home screen.
     let sq = (26.0 * s) as i32;
     let tile_cx = if mini { w / 2 } else { pad + sq / 2 + 1 };
@@ -326,15 +326,15 @@ fn draw_sidebar(v: &mut MenuView, ctx: &mut UiCtx, fb: &mut FB, w: i32, h: i32) 
     }
     fb.rect_rounded_rot(tile_cx, tile_cy, sq, sq, (6.0 * s) as i32, -0.16, t.red);
     let ir = 14.0 * s;
-    let ir_w = font::measure(ctx.fonts, "R", ir, true);
+    let ir_w = font::measure(ctx.fonts, "A", ir, true);
     font::draw(
-        ctx.fonts, fb, tile_cx as f32 - ir_w / 2.0, tile_cy as f32 + ir * 0.35, "R", ir,
+        ctx.fonts, fb, tile_cx as f32 - ir_w / 2.0, tile_cy as f32 + ir * 0.35, "A", ir,
         t.white, true, 0.0,
     );
     if !mini {
         let wx = (tile_cx + sq / 2 + (6.0 * s) as i32) as f32;
         font::draw(
-            ctx.fonts, fb, wx, tile_cy as f32 + 14.0 * s * 0.35, "ustBlox", 14.0 * s,
+            ctx.fonts, fb, wx, tile_cy as f32 + 14.0 * s * 0.35, "evora", 14.0 * s,
             t.text, true, 0.0,
         );
     }
@@ -402,7 +402,7 @@ fn draw_sidebar(v: &mut MenuView, ctx: &mut UiCtx, fb: &mut FB, w: i32, h: i32) 
     );
     ctx.hits.add(Rect { x: bx, y: by, w: bw, h: bw }, Hit::NavSettings);
     if !mini {
-        let ver = format!("RustBlox v{}", env!("CARGO_PKG_VERSION"));
+        let ver = format!("Aevora v{}", env!("CARGO_PKG_VERSION"));
         let vw = font::measure(ctx.fonts, &ver, 10.5 * s, false);
         font::draw(
             ctx.fonts, fb, (w - pad) as f32 - vw, by as f32 + bw as f32 * 0.5 + 10.5 * s * 0.35,
