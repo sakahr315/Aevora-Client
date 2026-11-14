@@ -65,7 +65,9 @@ fn parse_args() -> Result<Option<Args>, String> {
             "--timeout-ms" => {
                 timeout_ms = parse_value("--timeout-ms", args.next())?;
                 if !(100..=MAX_TIMEOUT_MS).contains(&timeout_ms) {
-                    return Err(format!("--timeout-ms must be between 100 and {MAX_TIMEOUT_MS}"));
+                    return Err(format!(
+                        "--timeout-ms must be between 100 and {MAX_TIMEOUT_MS}"
+                    ));
                 }
             }
             "--memory-mb" => {
@@ -226,7 +228,10 @@ fn run_local(
         }
     });
 
-    println!("{prefix} running {} (offline Luau, {memory_mb} MB heap, {timeout_ms} ms timeout)", path.display());
+    println!(
+        "{prefix} running {} (offline Luau, {memory_mb} MB heap, {timeout_ms} ms timeout)",
+        path.display()
+    );
     lua.load(&source)
         .set_name(path.display().to_string())
         .exec()
@@ -309,13 +314,7 @@ fn main() -> ExitCode {
 
     let index = args.worker_index.unwrap_or(1);
     let count = args.worker_count.unwrap_or(1);
-    match run_local(
-        &args.script,
-        index,
-        count,
-        args.timeout_ms,
-        args.memory_mb,
-    ) {
+    match run_local(&args.script, index, count, args.timeout_ms, args.memory_mb) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("{error}");
