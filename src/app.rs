@@ -1326,7 +1326,7 @@ impl ApplicationHandler<UserEvent> for App {
 
     fn resumed(&mut self, elwt: &ActiveEventLoop) {
         let attrs = Window::default_attributes()
-            .with_title("RustBlox \u{2014} Unofficial Roblox Client")
+            .with_title("Aevora Client — Unofficial Roblox Client")
             .with_inner_size(winit::dpi::LogicalSize::new(WINDOW_W, WINDOW_H))
             .with_min_inner_size(winit::dpi::LogicalSize::new(880.0, 600.0))
             .with_window_level(WindowLevel::Normal);
