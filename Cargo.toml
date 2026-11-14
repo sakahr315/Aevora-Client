@@ -14,6 +14,7 @@ categories = ["games", "network-programming"]
 [workspace]
 members = ["mobile"]
 default-members = ["."]
+exclude = ["tools/aevora-luau"]
 
 [dependencies]
 winit = "0.30.13"
