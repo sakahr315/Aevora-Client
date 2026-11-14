@@ -16,7 +16,8 @@ use crate::model::{
 };
 use crate::theme::{self, Theme};
 use crate::ui::{self, draw_button, BtnStyle, FieldId, Hit, Rect, TextField};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
+use std::path::PathBuf;
 use std::time::Instant;
 
 /// Which main-area pane is open (driven by the sidebar).
@@ -39,6 +40,7 @@ pub enum FriendPane {
 pub enum SettingsTab {
     General,
     Appearance,
+    Scripts,
     Logs,
 }
 
@@ -150,6 +152,50 @@ pub struct SettingsState {
     pub logs_follow: bool,
 }
 
+
+/// Local Luau workspace state. Script execution itself is managed by App so
+/// the event loop can start/stop the child process without blocking the UI.
+pub struct ScriptsState {
+    pub files: Vec<PathBuf>,
+    pub selected: Option<usize>,
+    pub output: VecDeque<String>,
+    pub status: String,
+    pub running: bool,
+}
+
+impl ScriptsState {
+    fn new() -> Self {
+        let files = crate::script_workspace::discover_scripts().unwrap_or_default();
+        let selected = if files.is_empty() { None } else { Some(0) };
+        let status = if files.is_empty() {
+            "No .lua or .luau files found. Add one under scripts/.".to_owned()
+        } else {
+            format!("{} local script(s) found.", files.len())
+        };
+        Self {
+            files,
+            selected,
+            output: VecDeque::new(),
+            status,
+            running: false,
+        }
+    }
+
+    pub fn push_output(&mut self, line: String) {
+        const MAX_LINES: usize = 120;
+        self.output.push_back(line);
+        while self.output.len() > MAX_LINES {
+            self.output.pop_front();
+        }
+    }
+
+    pub fn selected_path(&self) -> Option<PathBuf> {
+        self.selected
+            .and_then(|index| self.files.get(index))
+            .cloned()
+    }
+}
+
 pub struct MenuView {
     pub profile: crate::model::UserProfile,
     pub rows: Vec<FriendRow>,
@@ -188,6 +234,7 @@ pub struct MenuView {
     pub add_metrics: Option<ListMetrics>,
     // -- Settings tab --
     pub settings: SettingsState,
+    pub scripts: ScriptsState,
     pub settings_scroll: f32,
     pub settings_metrics: Option<ListMetrics>,
     // -- shared --
@@ -241,6 +288,7 @@ impl MenuView {
             add_scroll: 0.0,
             add_metrics: None,
             settings: SettingsState { tab: SettingsTab::General, logs_follow: true },
+            scripts: ScriptsState::new(),
             settings_scroll: 0.0,
             settings_metrics: None,
             last_update: None,
