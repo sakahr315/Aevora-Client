@@ -9,7 +9,18 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn contains_project_files(path: &Path) -> bool {
-    path.join("Cargo.toml").is_file() && path.join("scripts").is_dir()
+    if !path.join("scripts").is_dir() {
+        return false;
+    }
+    let has_manifest = path.join("Cargo.toml").is_file();
+    let runner_name = if cfg!(windows) { "aevora-luau.exe" } else { "aevora-luau" };
+    let has_bundled_runner = [
+        path.join("tools/aevora-luau/target/release").join(runner_name),
+        path.join("tools/aevora-luau/target/debug").join(runner_name),
+    ]
+    .iter()
+    .any(|candidate| candidate.is_file());
+    has_manifest || has_bundled_runner
 }
 
 /// Resolve the repository root when running from a Cargo build tree or from
