@@ -441,9 +441,6 @@ impl App {
     fn schedule_anim(&mut self) -> Option<Instant> {
         let now = Instant::now();
 
-        // Drain output from the offline Luau test process and check its exit
-        // state without blocking the winit event loop.
-        self.poll_local_script();
         let mut wakes: Vec<Instant> = Vec::with_capacity(3);
 
         let spinner = match &self.screen {
@@ -1607,6 +1604,10 @@ impl ApplicationHandler<UserEvent> for App {
 
     fn about_to_wait(&mut self, elwt: &ActiveEventLoop) {
         let now = Instant::now();
+
+        // Drain the local Luau process log and check exit state without
+        // blocking the winit event loop.
+        self.poll_local_script();
 
         // Game screen: advance the camera, watch the session health and
         // redraw every frame.
